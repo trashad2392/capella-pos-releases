@@ -1,0 +1,44 @@
+# Capella POS — AppVeyor build config
+#
+# ⚠ This file's home is the ROOT of the PUBLIC releases repo
+#   (trashad2392/capella-pos-releases) as `appveyor.yml`.
+#   The copy in the source repo (scripts/appveyor-releases-repo.yml) is the
+#   master — when you change it, paste the new version into the releases repo.
+#
+# How it works: AppVeyor (free for public repos) is attached to the public
+# releases repo. The build clones the PRIVATE source repo using the GH_TOKEN
+# secure variable, builds the Windows installer, and electron-builder
+# `--publish always` uploads the release (exe + blockmap + latest.yml) back to
+# the public releases repo — named v<version> from the source package.json.
+#
+# To release: bump the version in the source repo's package.json, push to
+# main, then click NEW BUILD on the AppVeyor project page.
+#
+# Secure variables to set in AppVeyor → project Settings → Environment
+# (check "secure" so they are masked in the public build logs):
+#   GH_TOKEN            fine-grained PAT — Contents: Read on pos-system-fnb,
+#                       Contents: Read and write on capella-pos-releases
+#   LICENSE_SERVER_URL  same value as the GitHub Actions secret
+#   LICENSE_HMAC_KEY    same value as the GitHub Actions secret
+
+image: Visual Studio 2022
+
+environment:
+  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+# The releases repo itself has nothing to build with msbuild
+build: off
+test: off
+
+# Don't rebuild when electron-builder pushes the release tag back to this repo
+skip_tags: true
+
+install:
+  - ps: Install-Product node 18 x64
+  - git clone --depth 1 https://x-access-token:%GH_TOKEN%@github.com/trashad2392/pos-system-fnb.git C:\projects\capella-src
+  - cd C:\projects\capella-src
+  - npm ci
+
+build_script:
+  - cd C:\projects\capella-src
+  - npm run release
