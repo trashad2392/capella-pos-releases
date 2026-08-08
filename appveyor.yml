@@ -58,8 +58,17 @@
 #
 # Secure variables to set in AppVeyor → project Settings → Environment
 # (check "secure" so they are masked in the public build logs):
-#   GH_TOKEN            fine-grained PAT — Contents: Read on pos-system-fnb,
-#                       Contents: Read and write on capella-pos-releases
+#   GH_TOKEN            fine-grained PAT — BOTH pos-system-fnb and
+#                       capella-pos-releases selected, Contents: Read and
+#                       write. It is used twice: to clone the private source
+#                       repo in `install:` (needs read there) and by
+#                       publish-release.js to upload the release (needs write
+#                       on the releases repo). A fine-grained PAT applies ONE
+#                       permission set to every repo it selects, so read-only
+#                       on the source repo is not expressible in a single
+#                       token — it would take a second variable. Set it via
+#                       the AppVeyor UI, not the API (see
+#                       .claude/RELEASE_RUNBOOK.md "Credentials").
 #   LICENSE_SERVER_URL  same value as the GitHub Actions secret
 #   LICENSE_HMAC_KEY    same value as the GitHub Actions secret
 
@@ -113,3 +122,20 @@ build_script:
   #    how you prove the packaged suite passes on Windows (it never has) without
   #    staking a release on it. Uncomment once a build reaches here green.
   # - node scripts/publish-release.js   # DRY RUN: uncomment once a build reaches here green
+
+# When a gate fails, keep the evidence. Playwright writes error-context.md and
+# trace.zip per failed test (see playwright.config.js `screenshot`/`trace`), and
+# CI would otherwise discard the whole directory when the machine is torn down.
+# launchPackagedApp() already folds the main process's stderr and electron-log
+# into the thrown error, so the CI log usually explains a boot failure on its
+# own — this is the backstop for anything that needs the trace viewer.
+on_failure:
+  - ps: |
+      $rt = "C:\projects\capella-src\test-results"
+      if (Test-Path $rt) {
+        $zip = "C:\projects\test-results.zip"
+        Compress-Archive -Path $rt -DestinationPath $zip -Force
+        Push-AppveyorArtifact $zip -FileName "test-results.zip"
+      } else {
+        Write-Host "no test-results directory to upload"
+      }
