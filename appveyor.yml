@@ -35,19 +35,23 @@
 #      print/receipt incident (see CLAUDE.md "App Protection Layer") before it
 #      shipped, regardless of which component it hit.
 #
-# ⚠️ NOT DEPLOYED AS OF 2026-08-08. The live appveyor.yml in the releases repo
-#    is still the pre-gate version — its whole build_script is `npm run release`
-#    (electron-builder --publish always), with no smoke tests and no
-#    publish-release.js. That is why nothing complained while wide-flow.spec.js
-#    did not exist, three specs sat broken against the 2026-08-06 wizard
-#    rebuild, and resolveExecutable looked for a Capella.exe no Windows build
-#    produces: none of it has ever run in CI.
+# ⚠️ DEPLOYED 2026-08-08 AS A DRY RUN (releases repo commit e0db2a5). The live
+#    appveyor.yml now matches this file except that its final
+#    `node scripts/publish-release.js` line is COMMENTED OUT, so steps 1-5 run
+#    and still fail the build on a regression, but nothing is uploaded.
 #
-#    Deploying this file therefore changes TWO things at once — it adds the
-#    gates AND switches publishing from electron-builder to
-#    publish-release.js, which has never run in CI. Do a dry run first
-#    (paste this in with the final publish step commented out) rather than
-#    discovering both on a release you need.
+#    Until 2026-08-08 the live config was the pre-gate version — whole
+#    build_script was `npm run release` (electron-builder --publish always),
+#    no smoke tests, no publish-release.js. That is why nothing complained
+#    while wide-flow.spec.js did not exist, three specs sat broken against the
+#    2026-08-06 wizard rebuild, and resolveExecutable looked for a Capella.exe
+#    no Windows build produces: none of it had ever run in CI.
+#
+#    The dry run exists because deploying this file changes TWO things at once
+#    — it adds the gates AND switches publishing from electron-builder to
+#    publish-release.js, which has never run in CI. Expect the first build to
+#    go red: the packaged suite has never executed on Windows. Once a build
+#    reaches step 6 green, uncomment that line in the releases repo.
 #
 # To release: bump the version in the source repo's package.json, push to
 # main, then click NEW BUILD on the AppVeyor project page.
@@ -87,10 +91,16 @@ build_script:
   #    dist-test/ (unobfuscated) and dist-test-obfuscated/ (obfuscated) —
   #    both built before either gets tested, since wide-flow.spec.js drives
   #    both in one Playwright invocation.
-  - set NEXT_PUBLIC_SKIP_LICENSE=true
-  - npm run build:electron:test
-  - npm run build:electron:test:obfuscated
-  - set NEXT_PUBLIC_SKIP_LICENSE=
+  #    NEXT_PUBLIC_SKIP_LICENSE is set INLINE on each line, not as a preceding
+  #    standalone `set` step. It is a Next.js build-time variable - next build
+  #    inlines process.env.NEXT_PUBLIC_* into the client bundle - so it has to
+  #    be in the environment of the npm process itself. A separate `set` line
+  #    only reaches it if AppVeyor happens to run build_script lines in one
+  #    shared cmd session; inline && works either way. It must NOT go in the
+  #    top-level `environment:` block, which would bake license-skip into the
+  #    real dist/ build that gets published to customers.
+  - cmd: set "NEXT_PUBLIC_SKIP_LICENSE=true" && npm run build:electron:test
+  - cmd: set "NEXT_PUBLIC_SKIP_LICENSE=true" && npm run build:electron:test:obfuscated
   # 4. Deep smoke test (onboarding → login → shift gate → POS home)
   - npx playwright test tests/e2e/deep-flow.spec.js
   # 5. Wide smoke test — full order/payment/receipt journey, unobfuscated AND
