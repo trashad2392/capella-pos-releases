@@ -35,10 +35,16 @@
 #      print/receipt incident (see CLAUDE.md "App Protection Layer") before it
 #      shipped, regardless of which component it hit.
 #
-# ⚠️ DEPLOYED 2026-08-08 AS A DRY RUN (releases repo commit e0db2a5). The live
-#    appveyor.yml now matches this file except that its final
-#    `node scripts/publish-release.js` line is COMMENTED OUT, so steps 1-5 run
-#    and still fail the build on a regression, but nothing is uploaded.
+# ⚠️ FULLY LIVE SINCE 2026-08-08. Steps 1-5 gate every build and step 6
+#    publishes. The live appveyor.yml is byte-identical to this file.
+#
+#    It was deployed earlier that day as a DRY RUN (releases repo commit
+#    e0db2a5) with the publish line commented out, because deploying this file
+#    changes TWO things at once — it adds the gates AND switches publishing
+#    from electron-builder to publish-release.js, which had never run in CI.
+#    Build 43 then cleared steps 1-5 on Windows (packaged-boot 11.3s,
+#    deep-flow, wide-flow green across BOTH the plain and obfuscated
+#    artifacts), so the publish line was uncommented.
 #
 #    Until 2026-08-08 the live config was the pre-gate version — whole
 #    build_script was `npm run release` (electron-builder --publish always),
@@ -46,12 +52,6 @@
 #    while wide-flow.spec.js did not exist, three specs sat broken against the
 #    2026-08-06 wizard rebuild, and resolveExecutable looked for a Capella.exe
 #    no Windows build produces: none of it had ever run in CI.
-#
-#    The dry run exists because deploying this file changes TWO things at once
-#    — it adds the gates AND switches publishing from electron-builder to
-#    publish-release.js, which has never run in CI. Expect the first build to
-#    go red: the packaged suite has never executed on Windows. Once a build
-#    reaches step 6 green, uncomment that line in the releases repo.
 #
 # To release: bump the version in the source repo's package.json, push to
 # main, then click NEW BUILD on the AppVeyor project page.
@@ -117,11 +117,11 @@ build_script:
   #    and blocks the release.
   - npx playwright test tests/e2e/wide-flow.spec.js
   # 6. All green — publish dist/ artifacts to the releases repo.
-  #    FOR A DRY RUN: comment out the single line below. Steps 1-5 still run and
-  #    still fail the build if anything breaks, but nothing is uploaded — which is
-  #    how you prove the packaged suite passes on Windows (it never has) without
-  #    staking a release on it. Uncomment once a build reaches here green.
-  # - node scripts/publish-release.js   # DRY RUN: uncomment once a build reaches here green
+  #    TO DRY-RUN THIS PIPELINE AGAIN (e.g. after reworking the gates): comment
+  #    out the single line below. Steps 1-5 still run and still fail the build if
+  #    anything breaks, but nothing is uploaded — which is how you prove the
+  #    packaged suite passes on Windows without staking a release on it.
+  - node scripts/publish-release.js
 
 # When a gate fails, keep the evidence. Playwright writes error-context.md and
 # trace.zip per failed test (see playwright.config.js `screenshot`/`trace`), and
