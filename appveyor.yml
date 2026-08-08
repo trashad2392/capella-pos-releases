@@ -7,9 +7,47 @@
 #
 # How it works: AppVeyor (free for public repos) is attached to the public
 # releases repo. The build clones the PRIVATE source repo using the GH_TOKEN
-# secure variable, builds the Windows installer, and electron-builder
-# `--publish always` uploads the release (exe + blockmap + latest.yml) back to
-# the public releases repo — named v<version> from the source package.json.
+# secure variable, builds the Windows installer, runs packaged-app smoke
+# tests against the output (a failed test BLOCKS the upload), then
+# scripts/publish-release.js uploads the release (exe + blockmap + latest.yml)
+# back to the public releases repo — named v<version> from package.json.
+#
+# Smoke tests (tests/e2e/ in the source repo):
+#   1. packaged-boot.spec.js — boots the real release artifact (dist/, real
+#      license); asserts the Activation screen renders (catches packaged-only
+#      renderer regressions).
+#   2. deep-flow.spec.js — boots the license-skipped, UNOBFUSCATED test build
+#      (dist-test/); drives onboarding → PIN login → shift gate → POS home.
+#      Cheap sanity check that the app logic itself works, independent of
+#      obfuscation.
+#   3. wide-flow.spec.js — the obfuscation regression gate (written
+#      2026-08-07; this file described it before it existed). Runs the SAME
+#      journey — 10-step onboarding → shift open → back office (discount +
+#      drive-thru lane) → takeaway order with an order-level discount → Fast
+#      Cash → on-screen receipt → split payment across two methods →
+#      drive-thru lane queue board — against BOTH dist-test/ (unobfuscated)
+#      and dist-test-obfuscated/ (obfuscated, built with the real
+#      obfuscate-renderer.js step). Credit Sale is deliberately not covered
+#      (needs a Customer with a credit limit; PaymentModal is already
+#      exercised by the split leg). Since obfuscation is supposed to be
+#      semantics-preserving, any pass/fail divergence between the two runs is
+#      a miscompilation — this is what would have caught the 2026-07-16
+#      print/receipt incident (see CLAUDE.md "App Protection Layer") before it
+#      shipped, regardless of which component it hit.
+#
+# ⚠️ NOT DEPLOYED AS OF 2026-08-08. The live appveyor.yml in the releases repo
+#    is still the pre-gate version — its whole build_script is `npm run release`
+#    (electron-builder --publish always), with no smoke tests and no
+#    publish-release.js. That is why nothing complained while wide-flow.spec.js
+#    did not exist, three specs sat broken against the 2026-08-06 wizard
+#    rebuild, and resolveExecutable looked for a Capella.exe no Windows build
+#    produces: none of it has ever run in CI.
+#
+#    Deploying this file therefore changes TWO things at once — it adds the
+#    gates AND switches publishing from electron-builder to
+#    publish-release.js, which has never run in CI. Do a dry run first
+#    (paste this in with the final publish step commented out) rather than
+#    discovering both on a release you need.
 #
 # To release: bump the version in the source repo's package.json, push to
 # main, then click NEW BUILD on the AppVeyor project page.
@@ -41,4 +79,27 @@ install:
 
 build_script:
   - cd C:\projects\capella-src
-  - npm run release
+  # 1. Full release build — artifacts land in dist/, nothing published yet
+  - npm run build:electron
+  # 2. Smoke test the real artifact (boot → Activation screen)
+  - npx playwright test tests/e2e/packaged-boot.spec.js
+  # 3. License-skipped test variants (reuse prisma/addon/bake from step 1):
+  #    dist-test/ (unobfuscated) and dist-test-obfuscated/ (obfuscated) —
+  #    both built before either gets tested, since wide-flow.spec.js drives
+  #    both in one Playwright invocation.
+  - set NEXT_PUBLIC_SKIP_LICENSE=true
+  - npm run build:electron:test
+  - npm run build:electron:test:obfuscated
+  - set NEXT_PUBLIC_SKIP_LICENSE=
+  # 4. Deep smoke test (onboarding → login → shift gate → POS home)
+  - npx playwright test tests/e2e/deep-flow.spec.js
+  # 5. Wide smoke test — full order/payment/receipt journey, unobfuscated AND
+  #    obfuscated builds. Any divergence between the two = a miscompilation,
+  #    and blocks the release.
+  - npx playwright test tests/e2e/wide-flow.spec.js
+  # 6. All green — publish dist/ artifacts to the releases repo.
+  #    FOR A DRY RUN: comment out the single line below. Steps 1-5 still run and
+  #    still fail the build if anything breaks, but nothing is uploaded — which is
+  #    how you prove the packaged suite passes on Windows (it never has) without
+  #    staking a release on it. Uncomment once a build reaches here green.
+  # - node scripts/publish-release.js   # DRY RUN: uncomment once a build reaches here green
