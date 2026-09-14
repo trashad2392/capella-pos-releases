@@ -116,6 +116,10 @@ build_script:
   #    obfuscated builds. Any divergence between the two = a miscompilation,
   #    and blocks the release.
   - npx playwright test tests/e2e/wide-flow.spec.js
+  # 5b. Station screens — Kitchen Display, Packing Screen, Queuing Display, the
+  #     same plain-vs-obfuscated differential. Its own step so a failure here and
+  #     a failure in wide-flow cannot hide behind each other.
+  - npx playwright test tests/e2e/station-screens.spec.js
   # 6. All green — publish dist/ artifacts to the releases repo.
   #    TO DRY-RUN THIS PIPELINE AGAIN (e.g. after reworking the gates): comment
   #    out the single line below. Steps 1-5 still run and still fail the build if
