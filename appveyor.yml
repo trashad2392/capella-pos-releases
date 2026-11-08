@@ -119,6 +119,10 @@ build_script:
   # 5b. Station screens — Kitchen Display, Packing Screen, Queuing Display, the
   #     same plain-vs-obfuscated differential. Its own step so a failure here and
   #     a failure in wide-flow cannot hide behind each other.
+   # 5c. Adding a PC (dist-test/, unobfuscated): the screen, the code, its own login,
+  #     a real database restart under the running POS, then an encrypted connection
+  #     from this machine's network address. The one gate that proves this on Windows.
+  - npx playwright test tests/e2e/add-a-pc.spec.js
   - npx playwright test tests/e2e/station-screens.spec.js
   # 6. All green — publish dist/ artifacts to the releases repo.
   #    TO DRY-RUN THIS PIPELINE AGAIN (e.g. after reworking the gates): comment
